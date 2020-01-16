@@ -12,7 +12,7 @@ class model_zoo:
 
     def build_model(self, kwargs = {}):
 
-        model_list = ["CNN_v1"]
+        model_list = ["CNN_v1", "EXAMPLE_CNN"]
         
         if self.model_ticket not in model_list:
             print("sorry, wrong ticket!")
@@ -126,6 +126,58 @@ class model_zoo:
                 print("conv_5: %s" % conv_5.get_shape()) 
                 
                 conv_code = tf.reshape(conv_5, [tf.shape(self.inputs)[0], 4*2*1024])                   
+                fc_1 = nf.fc_layer(conv_code, model_params["fc_1"], name="fc_1", activat_fn=nf.lrelu, is_bn=True, is_training=self.is_training, reg=l2_reg)
+                fc_1 = tf.layers.dropout(fc_1, rate=self.dropout, training=self.is_training, name='fc_1_dropout')
+                print("fc_1: %s" % fc_1.get_shape())     
+
+                fc_2 = nf.fc_layer(fc_1, model_params["fc_2"], name="fc_2", activat_fn=nf.lrelu, is_bn=True, is_training=self.is_training, reg=l2_reg)
+                fc_2 = tf.layers.dropout(fc_2, rate=self.dropout, training=self.is_training, name='fc_2_dropout')
+                print("fc_2: %s" % fc_2.get_shape())     
+                
+                fc_out = nf.fc_layer(fc_2, model_params["fc_out"], name="fc_out", activat_fn=None)
+                print("fc_out: %s" % fc_out.get_shape())  
+                
+                return fc_out, conv_1
+
+    def EXAMPLE_CNN(self, kwargs):
+        
+            model_params = {       
+    
+                "conv_1": [3,3,128],
+                "conv_2": [3,3,256],
+                
+                "fc_1": 1024,
+                "fc_2": 512,
+                "fc_out": 10,
+                
+            }
+    
+            reuse = kwargs["reuse"]
+            l2_reg = tf.contrib.layers.l2_regularizer(1e-5)   
+
+            print("===================================================================")
+            
+            with tf.variable_scope("CNN", reuse=reuse):
+                
+                input = kwargs["input"]
+                
+                print("[EXAMPLE_CNN] input: %s" % input.get_shape())
+
+                conv_1_1 = nf.convolution_layer(input, model_params["conv_1"], [1,1,1,1], name="conv_1_1", padding='SAME', activat_fn=nf.lrelu, is_bn=True, is_training=self.is_training, reg=l2_reg)               
+                conv_1_2 = nf.convolution_layer(conv_1_1, model_params["conv_1"], [1,1,1,1], name="conv_1_2", padding='SAME', activat_fn=nf.lrelu, is_bn=True, is_training=self.is_training, reg=l2_reg)               
+                conv_1 = conv_1_1 + conv_1_2
+                conv_1 = tf.nn.max_pool(conv_1, [1,2,2,1], [1,2,2,1], padding='VALID')
+                conv_1 = tf.layers.dropout(conv_1, rate=self.dropout, training=self.is_training, name='conv_1_dropout')
+                print("conv_1: %s" % conv_1.get_shape())     
+                
+                conv_2_1 = nf.convolution_layer(conv_1, model_params["conv_2"], [1,1,1,1], name="conv_2_1", padding='SAME', activat_fn=nf.lrelu, is_bn=True, is_training=self.is_training, reg=l2_reg)               
+                conv_2_2 = nf.convolution_layer(conv_2_1, model_params["conv_2"], [1,1,1,1], name="conv_2_2", padding='SAME', activat_fn=nf.lrelu, is_bn=True, is_training=self.is_training, reg=l2_reg)               
+                conv_2 = conv_2_1 + conv_2_2
+                conv_2 = tf.nn.max_pool(conv_2, [1,2,2,1], [1,2,2,1], padding='VALID')
+                conv_2 = tf.layers.dropout(conv_2, rate=self.dropout, training=self.is_training, name='conv_2_dropout')
+                print("conv_2: %s" % conv_2.get_shape())     
+                
+                conv_code = tf.reshape(conv_2, [tf.shape(self.inputs)[0], 7*7*256])                   
                 fc_1 = nf.fc_layer(conv_code, model_params["fc_1"], name="fc_1", activat_fn=nf.lrelu, is_bn=True, is_training=self.is_training, reg=l2_reg)
                 fc_1 = tf.layers.dropout(fc_1, rate=self.dropout, training=self.is_training, name='fc_1_dropout')
                 print("fc_1: %s" % fc_1.get_shape())     

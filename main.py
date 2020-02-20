@@ -42,6 +42,8 @@ if __name__ == "__main__":
     
     learn_rate_init = conf["learn_rate_init"]
     
+    output_inf_model = conf["output_inf_model"]
+    
     print("===================================================================")
     if is_training == True:
         batch_size = conf["batch_size"]
@@ -54,8 +56,12 @@ if __name__ == "__main__":
         print("max_iters: [{}]".format(max_iters))   
         print("learn_rate_init: [{}]".format(learn_rate_init))
     else:
-        batch_size = 32
-        print("*** [Testing] ***")
+        if output_inf_model == True:
+            batch_size = 1
+            print("*** [Output Inference Model] ***")
+        else:
+            batch_size = 64
+            print("*** [Testing] ***")
         print("test_data_path: [{}]".format(conf["test_data_path"]))
 
     print("batch_size: [{}]".format(batch_size))   
@@ -80,36 +86,36 @@ if __name__ == "__main__":
                         restore_model=restore_model,
                         restore_step=restore_step,
                         model_ticket=model_ticket,
-                        is_training=is_training)
+                        is_training=is_training,
+                        output_inf_model=output_inf_model)
         
         MODEL.build_model()
         MODEL.train()
 
     else:
+
+        test_data_path = conf["test_data_path"]            
         
-        test_data_path = conf["test_data_path"]
+        cb_ob = InputData(None, None, None, test_data_path)
+
+        MODEL = model(  batch_size=batch_size, 
+                        max_iters=max_iters, 
+                        dropout=dropout,
+                        model_path=model_path, 
+                        data_ob=cb_ob, 
+                        log_dir=root_log_dir, 
+                        learnrate_init=learn_rate_init,
+                        ckpt_name=ckpt_name,
+                        test_ckpt=test_ckpt,
+                        train_ckpt=train_ckpt,
+                        restore_model=restore_model,
+                        restore_step=restore_step,
+                        model_ticket=model_ticket,
+                        is_training=is_training,
+                        output_inf_model=output_inf_model)
         
-        for path in test_data_path:
-        
-            cb_ob = InputData(None, None, None, path)
-    
-            MODEL = model(  batch_size=batch_size, 
-                            max_iters=max_iters, 
-                            dropout=dropout,
-                            model_path=model_path, 
-                            data_ob=cb_ob, 
-                            log_dir=root_log_dir, 
-                            learnrate_init=learn_rate_init,
-                            ckpt_name=ckpt_name,
-                            test_ckpt=test_ckpt,
-                            train_ckpt=train_ckpt,
-                            restore_model=restore_model,
-                            restore_step=restore_step,
-                            model_ticket=model_ticket,
-                            is_training=is_training)
-            
-            MODEL.build_eval_model()
-            MODEL.test()
+        MODEL.build_eval_model()
+        MODEL.test()
 
 
 

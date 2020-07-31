@@ -64,6 +64,8 @@ class config:
         common_config["restore_model"] = False
         common_config["restore_step"] = 0
 
+        common_config["output_inf_model"] = False
+
     def Default_inference_config(self):
         
         # Train config 

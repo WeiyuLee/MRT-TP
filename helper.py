@@ -84,8 +84,8 @@ def preprocess_and_save_1st_data(dataset_folder_path, output_path):
         os.makedirs(output_path)
     
     # Load training data ======================================================
-    true_data, true_label = load_data(dataset_folder_path, ["0", "1", "2"])
-    false_data, false_label = load_data(dataset_folder_path, ["3"]) 
+    true_data, true_label = load_1st_data(os.path.join(dataset_folder_path, "crop_true"), ["0", "1", "2"])
+    false_data, false_label = load_1st_data(os.path.join(dataset_folder_path, "crop_false"), ["3"]) 
     data = np.append(true_data, false_data, axis=0)
     label = np.append(true_label, false_label, axis=0)
     pickle.dump((data, label), open(os.path.join(output_path, 'raw_data_label.p'), 'wb'), protocol=4)

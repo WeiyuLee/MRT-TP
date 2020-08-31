@@ -86,7 +86,6 @@ if __name__ == "__main__":
                         restore_model=restore_model,
                         restore_step=restore_step,
                         model_ticket=model_ticket,
-                        is_training=is_training,
                         output_inf_model=output_inf_model)
         
         MODEL.build_model()
@@ -111,7 +110,6 @@ if __name__ == "__main__":
                         restore_model=restore_model,
                         restore_step=restore_step,
                         model_ticket=model_ticket,
-                        is_training=is_training,
                         output_inf_model=output_inf_model)
         
         MODEL.build_eval_model()

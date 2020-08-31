@@ -20,21 +20,39 @@ def lrelu(x, name = "leaky", alpha = 0.2):
 #def lrelu(name,x, leak=0.2):
 #    return tf.maximum(x, leak * x, name=name)
 
-def batchnorm_conv(input, index = 0, reuse = False, is_training = False):
-    
-    with tf.variable_scope("batchnorm_{}".format(index), reuse = reuse):
+def batchnorm_conv(input, name, momentum=0.1, is_training=tf.cast(True, tf.bool)):
+
+    is_training = tf.cast(is_training, tf.bool)
+
+    with tf.variable_scope(name + "_bn", reuse=tf.AUTO_REUSE):
 
         input = tf.identity(input)
-
         channels = input.get_shape()[3]
             
         beta = tf.get_variable("beta", [channels], dtype=tf.float32, initializer=tf.zeros_initializer())
-        gamma = tf.get_variable("gamma", [channels], dtype=tf.float32, initializer=tf.random_normal_initializer(1.0, 0.02))
+        gamma = tf.get_variable("gamma", [channels], dtype=tf.float32, initializer=tf.ones_initializer())
 
         pop_mean = tf.get_variable("pop_mean", [channels], dtype=tf.float32, initializer=tf.zeros_initializer(), trainable=False)
-        pop_variance  = tf.get_variable("pop_variance", [channels], dtype=tf.float32, initializer=tf.random_normal_initializer(1.0, 0.02), trainable=False)
+        pop_variance  = tf.get_variable("pop_variance", [channels], dtype=tf.float32, initializer=tf.ones_initializer(), trainable=False)
 
-        epsilon = 1e-3
+        epsilon = 1e-5
+        def batchnorm_train():
+            batch_mean, batch_variance = tf.nn.moments(input, axes=[0, 1, 2], keep_dims=False)
+
+            train_mean = tf.assign(pop_mean, pop_mean*(1-momentum) + batch_mean*momentum)
+            train_variance = tf.assign(pop_variance, pop_variance*(1-momentum) + batch_variance*momentum)
+
+            with tf.control_dependencies([train_mean, train_variance]):
+                return tf.nn.batch_normalization(input, batch_mean, batch_variance, beta, gamma, epsilon)
+
+        def batchnorm_infer():
+            return tf.nn.batch_normalization(input, pop_mean, pop_variance, beta, gamma, epsilon)
+
+        batch_normalized_output = tf.cond(is_training, batchnorm_train, batchnorm_infer)
+        return batch_normalized_output
+
+        '''
+        batch_normalized_output = tf.cond(is_training, batchnorm_train, batchnorm_infer)
 
         if is_training:
 
@@ -50,23 +68,40 @@ def batchnorm_conv(input, index = 0, reuse = False, is_training = False):
         else:
         
             return tf.nn.batch_normalization(input, pop_mean, pop_variance, beta, gamma, epsilon)
+        '''
 
-def batchnorm_fc(input, index = 0, reuse = False, is_training = False):
+def batchnorm_fc(input, name, momentum=0.1, is_training=tf.cast(True, tf.bool)):
     
-    with tf.variable_scope("batchnorm_{}".format(index), reuse = reuse):
+    is_training = tf.cast(is_training, tf.bool)
+
+    with tf.variable_scope(name + "_bn", reuse=tf.AUTO_REUSE):
     
-        input = tf.identity(input)
-        
+        input = tf.identity(input)       
         num_units = input.get_shape()[1]
             
         beta = tf.get_variable("beta", [num_units], dtype=tf.float32, initializer=tf.zeros_initializer())
-        gamma = tf.get_variable("gamma", [num_units], dtype=tf.float32, initializer=tf.random_normal_initializer(1.0, 0.02))
+        gamma = tf.get_variable("gamma", [num_units], dtype=tf.float32, initializer=tf.ones_initializer())
 
         pop_mean = tf.get_variable("pop_mean", [num_units], dtype=tf.float32, initializer=tf.zeros_initializer(), trainable=False)
-        pop_variance  = tf.get_variable("pop_variance", [num_units], dtype=tf.float32, initializer=tf.random_normal_initializer(1.0, 0.02), trainable=False)
+        pop_variance  = tf.get_variable("pop_variance", [num_units], dtype=tf.float32, initializer=tf.ones_initializer(), trainable=False)
     
-        epsilon = 1e-3
-    
+        epsilon = 1e-5
+        def batchnorm_train():
+            batch_mean, batch_variance = tf.nn.moments(input, axes=[0], keep_dims=False)
+
+            train_mean = tf.assign(pop_mean, pop_mean*(1-momentum) + batch_mean*momentum)
+            train_variance = tf.assign(pop_variance, pop_variance*(1-momentum) + batch_variance*momentum)
+
+            with tf.control_dependencies([train_mean, train_variance]):
+                return tf.nn.batch_normalization(input, batch_mean, batch_variance, beta, gamma, epsilon)
+
+        def batchnorm_infer():
+            return tf.nn.batch_normalization(input, pop_mean, pop_variance, beta, gamma, epsilon)
+
+        batch_normalized_output = tf.cond(is_training, batchnorm_train, batchnorm_infer)
+        return batch_normalized_output
+
+        '''
         if is_training:
             
             batch_mean, batch_variance = tf.nn.moments(input, axes=[0], keep_dims=False)
@@ -81,7 +116,7 @@ def batchnorm_fc(input, index = 0, reuse = False, is_training = False):
         else:
         
             return tf.nn.batch_normalization(input, pop_mean, pop_variance, beta, gamma, epsilon)
-
+        '''
 def convolution_layer(inputs, kernel_shape, stride, name, flatten = False ,padding = 'SAME',
                       initializer=tf.contrib.layers.xavier_initializer(), 
                       activat_fn=tf.nn.relu, 
@@ -94,19 +129,22 @@ def convolution_layer(inputs, kernel_shape, stride, name, flatten = False ,paddi
     
     with tf.variable_scope(name) as scope:
         
-        try:
-            weight = tf.get_variable("weights", rkernel_shape, tf.float32, initializer=initializer, regularizer=reg)
-            bias = tf.get_variable("bias", kernel_shape[2], tf.float32, initializer=tf.zeros_initializer())
-        except:
-            scope.reuse_variables()
-            weight = tf.get_variable("weights", rkernel_shape, tf.float32, initializer=initializer, regularizer=reg)
-            bias = tf.get_variable("bias",kernel_shape[2], tf.float32, initializer=tf.zeros_initializer())
+#        try:
+#            weight = tf.get_variable("weights", rkernel_shape, tf.float32, initializer=initializer, regularizer=reg)
+#            bias = tf.get_variable("bias", kernel_shape[2], tf.float32, initializer=tf.zeros_initializer())
+#        except:
+#            scope.reuse_variables()
+#            weight = tf.get_variable("weights", rkernel_shape, tf.float32, initializer=initializer, regularizer=reg)
+#            bias = tf.get_variable("bias",kernel_shape[2], tf.float32, initializer=tf.zeros_initializer())
+
+        weight = tf.get_variable("weights", rkernel_shape, tf.float32, initializer=initializer, regularizer=reg)
+        bias = tf.get_variable("bias", kernel_shape[2], tf.float32, initializer=tf.zeros_initializer())
         
         net = tf.nn.conv2d(inputs, weight, stride, padding=padding)
         net = tf.add(net, bias)
 
         if is_bn:
-            net = batchnorm_conv(net, is_training=is_training)
+            net = batchnorm_conv(net, name, is_training=is_training)
         
         if not activat_fn==None:
             net = activat_fn(net, name=name+"_out")
@@ -128,13 +166,16 @@ def deconvolution_layer(inputs, kernel_shape, outshape, stride, name, flatten = 
     
     with tf.variable_scope(name) as scope:
 
-        try:
-            weight = tf.get_variable("weights", rkernel_shape, tf.float32, initializer=initializer, regularizer=reg)
-            bias = tf.get_variable("bias", kernel_shape[2], tf.float32, initializer=tf.zeros_initializer())
-        except:
-            scope.reuse_variables()
-            weight = tf.get_variable("weights", rkernel_shape, tf.float32, initializer=initializer, regularizer=reg)
-            bias = tf.get_variable("bias", kernel_shape[2], tf.float32, initializer=tf.zeros_initializer())        
+#        try:
+#            weight = tf.get_variable("weights", rkernel_shape, tf.float32, initializer=initializer, regularizer=reg)
+#            bias = tf.get_variable("bias", kernel_shape[2], tf.float32, initializer=tf.zeros_initializer())
+#        except:
+#            scope.reuse_variables()
+#            weight = tf.get_variable("weights", rkernel_shape, tf.float32, initializer=initializer, regularizer=reg)
+#            bias = tf.get_variable("bias", kernel_shape[2], tf.float32, initializer=tf.zeros_initializer())        
+
+        weight = tf.get_variable("weights", rkernel_shape, tf.float32, initializer=initializer, regularizer=reg)
+        bias = tf.get_variable("bias", kernel_shape[2], tf.float32, initializer=tf.zeros_initializer())
         
         net = tf.nn.conv2d_transpose(inputs, weight, outshape, strides=stride, padding=padding)
         net = tf.nn.bias_add(net, bias)  
@@ -162,20 +203,22 @@ def fc_layer(inputs, out_shape, name,
     pre_shape = inputs.get_shape()[-1]
     
     with tf.variable_scope(name) as scope:
-        
-        
-        try:
-            weight = tf.get_variable("weights",[pre_shape, out_shape], tf.float32, initializer=initializer, regularizer=reg)
-            bias = tf.get_variable("bias",out_shape, tf.float32, initializer=initializer)
-        except:
-            scope.reuse_variables()
-            weight = tf.get_variable("weights",[pre_shape, out_shape], tf.float32, initializer=initializer, regularizer=reg)
-            bias = tf.get_variable("bias",out_shape, tf.float32, initializer=initializer)
+                
+#        try:
+#            weight = tf.get_variable("weights",[pre_shape, out_shape], tf.float32, initializer=initializer, regularizer=reg)
+#            bias = tf.get_variable("bias",out_shape, tf.float32, initializer=initializer)
+#        except:
+#            scope.reuse_variables()
+#            weight = tf.get_variable("weights",[pre_shape, out_shape], tf.float32, initializer=initializer, regularizer=reg)
+#            bias = tf.get_variable("bias",out_shape, tf.float32, initializer=initializer)
+
+        weight = tf.get_variable("weights",[pre_shape, out_shape], tf.float32, initializer=initializer, regularizer=reg)
+        bias = tf.get_variable("bias",out_shape, tf.float32, initializer=initializer)
         
         net = tf.nn.xw_plus_b(inputs, weight, bias, name=name)
         
         if is_bn:
-            net = batchnorm_fc(net, is_training=is_training)
+            net = batchnorm_fc(net, name, is_training=is_training)
         
         if activat_fn != None:
             net = activat_fn(net, name=name+'_out')
